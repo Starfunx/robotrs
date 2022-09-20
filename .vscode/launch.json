@@ -1,0 +1,23 @@
+// Configure debug launch settings
+{
+    "version": "0.2.0",
+    "projectName": "stm32f103C8T6",
+    "configurations": [
+        {
+            "name": "STlink launch",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceRoot}/target/thumbv7m-none-eabi/debug/robot",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "configFiles": ["interface/stlink-v2.cfg", "target/cs32f1x.cfg"], // openocd config files
+            "device": "STM32F103C8T6",
+            "interface": "swd",
+            "runToEntryPoint": "main", // else it starts at reset handler - not interested
+            "preLaunchTask": "build debug", // configured in tasks.json
+            // "preLaunchCommands": ["Build all"], // you can execute command instead of task
+            "svdFile": "", // Include svd to watch device peripherals
+            "swoConfig": {}, // currently (v1.7.0) not supported
+        },
+    ]
+}

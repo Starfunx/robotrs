@@ -1,0 +1,7 @@
+{
+    "rust-analyzer.cargo.target": "thumbv7m-none-eabi",
+    "rust-analyzer.checkOnSave.allTargets": false,
+
+    "cortex-debug.gdbPath": "arm-none-eabi-gdb",
+    "cortex-debug.openocdPath": "openocd",
+}

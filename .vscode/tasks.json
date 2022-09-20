@@ -1,0 +1,28 @@
+// Name these taks the way you want
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build release",
+            "group": "build",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["build", "--release"]
+        },
+        {
+            "label": "build clean",
+            "group": "build",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["clean"]
+        },
+        {
+            "label": "build debug",
+            "group": "build",
+            "type": "shell",
+            "command": "cargo",
+            "args": ["build"]
+        },
+
+    ]
+}
