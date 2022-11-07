@@ -16,6 +16,9 @@ use nb::block;
 use cortex_m_rt::entry;
 use stm32f1xx_hal::{pac, prelude::*, timer::Timer};
 
+mod stepper_driver;
+use stepper_driver::StepperDriver;
+
 #[entry]
 fn main() -> ! {
     // Get access to the core peripherals from the cortex-m crate
@@ -31,22 +34,24 @@ fn main() -> ! {
     // Freeze the configuration of all the clocks in the system and store the frozen frequencies in
     // `clocks`
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
+    let mut delay = cp.SYST.delay(&clocks);
 
     // Acquire the GPIOC peripheral
+    let mut gpiob = dp.GPIOB.split();
     let mut gpioc = dp.GPIOC.split();
 
-    // Configure gpio C pin 13 as a push-pull output. The `crh` register is passed to the function
-    // in order to configure the port. For pins 0-7, crl should be passed instead.
     let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
-    // Configure the syst timer to trigger an update every second
-    let mut timer = Timer::syst(cp.SYST, &clocks).counter_hz();
-    timer.start(1.Hz()).unwrap();
+    let mut dir = gpiob.pb12.into_push_pull_output(&mut gpiob.crh);
+    let mut step = gpiob.pb13.into_push_pull_output(&mut gpiob.crh);
+
+
+    let stepper_driver = StepperDriver::new(dir, step, delay).unwrap();
 
     // Wait for the timer to trigger an update and change the state of the LED
     loop {
-        block!(timer.wait()).unwrap();
         led.set_high();
-        block!(timer.wait()).unwrap();
+        delay.delay_ms(1_000_u16);
         led.set_low();
+        delay.delay(1.secs());
     }
 }
