@@ -1,75 +1,48 @@
-/// Example rust-embedded driver
-/// 
-/// This includes more options than you'll usually need, and is intended
-/// to be adapted (read: have bits removed) according to your use case.
 
-extern crate embedded_hal;
-use embedded_hal::blocking::delay;
+
+use cortex_m::delay;
 use embedded_hal::digital::v2::OutputPin;
 
+#[derive(Debug, Clone, Copy)]
+pub struct StepperDriverConfig {}
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Error<PinError> {
-    /// Underlying GPIO pin error
-    Pin(PinError),
-    
-    /// Device failed to resume from reset
-    ResetTimeout
-}
-
-/// Driver object is generic over peripheral traits 
-/// - You should include a unique type for each pin object as some HALs will export different types per-pin or per-bus
-/// 
-pub struct StepperDriver<DirPin, StepPin, Delay> {
-    /// Device configuration
-    // config: Config,
-
-    dir : DirPin,
-    step: StepPin,
-
-    /// Delay implementation
-    delay: Delay,
-
-}
-
-/// Driver configuration data
-pub struct Config {
-    /// Device polling time
-    pub poll_ms: u32,
-}
-
-impl Default for Config {
+impl Default for StepperDriverConfig {
     fn default() -> Self {
+        Self {}
+    }
+}
+
+
+pub struct StepperDriver<Step, Dir>
+where
+    Step:   OutputPin,
+    Dir:    OutputPin,
+{
+    step_pin: Step, 
+    dir_pin:  Dir,
+
+    _config: StepperDriverConfig,
+
+}
+
+
+
+impl<Step, Dir> StepperDriver<Step, Dir> 
+where
+    Step:   OutputPin,
+    Dir:    OutputPin,
+{
+    pub fn new(step_pin: Step, dir_pin: Dir) -> Self {
+
         Self {
-            poll_ms: 100,
+            dir_pin,
+            step_pin,
+            _config: StepperDriverConfig::default(),
         }
     }
-}
 
-/// Device reset timeout
-pub const RESET_TIMEOUT_MS: u32 = 100;
-
-impl<DirPin, StepPin, Delay> StepperDriver <DirPin, StepPin, Delay>
-where
-    DirPin: OutputPin<>,
-    StepPin: OutputPin<>,
-    Delay: delay::DelayMs<u32>,
-{
-    /// Create and initialise a new driver
-    pub fn new(dir: DirPin, step: StepPin, delay: Delay) -> Result<Self, Error<()>> {
-        // Create the driver object
-        let mut s = Self { 
-            // config,
-            dir, step, delay,
-        };
-
-
-        s.dir.set_low();
-        s.step.set_low();
-        s.delay.delay_ms(10);
-
-        Ok(s)
-    }
-
-
+    pub fn step(&mut self) {
+        _ = self.step_pin.set_high();        
+        _ = self.step_pin.set_low();      
+     }  
 }
