@@ -19,43 +19,48 @@ use stepper_driver::StepperDriver;
 
 #[entry]
 fn main() -> ! {
-    // Get access to the core peripherals from the cortex-m crate
-    let cp = cortex_m::Peripherals::take().unwrap();
-    // Get access to the device specific peripherals from the peripheral access crate
     let dp = pac::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
 
-    // Take ownership over the raw flash and rcc devices and convert them into the corresponding
-    // HAL structs
     let mut flash = dp.FLASH.constrain();
     let rcc = dp.RCC.constrain();
 
-    // Freeze the configuration of all the clocks in the system and store the frozen frequencies in
-    // `clocks`
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
-    // let mut delay = cp.SYST.delay(&clocks);
-    let mut delay = dp.TIM2.delay_us(&clocks);
     
-    // Store the GPIOA in the mutex, moving it.
-    // interrupt::free(|cs| MY_GPIO.borrow(cs).replace(Some(delay)));
-    // We can no longer use `gpioa` or `dp.GPIOA`, and instead have to
-    // access it via the mutex.
+    let mut delay = cp.SYST.delay(&clocks);
 
-    // Acquire the GPIOC peripheral
     let mut gpiob = dp.GPIOB.split();
-    // let mut gpioc = dp.GPIOC.split();
+    let mut gpioc = dp.GPIOC.split();
 
-    // let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
-    let mut dir = gpiob.pb12.into_push_pull_output(&mut gpiob.crh);
-    let mut step = gpiob.pb13.into_push_pull_output(&mut gpiob.crh);
+    let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
+    // let mut dir = gpiob.pb12.into_push_pull_output(&mut gpiob.crh);
+    // let mut step = gpiob.pb13.into_push_pull_output(&mut gpiob.crh);
 
-    let mut stepper_driver = StepperDriver::new(dir, step);
+    let mut stepper_driver = StepperDriver::new(
+        gpiob.pb13.into_push_pull_output(&mut gpiob.crh),
+        gpiob.pb12.into_push_pull_output(&mut gpiob.crh)
+    );
+
+    let mut stepper_driver2 = StepperDriver::new(
+        gpiob.pb6.into_push_pull_output(&mut gpiob.crl),
+        gpiob.pb5.into_push_pull_output(&mut gpiob.crl)
+    );
+    
+    let mut enable1 = gpiob.pb14.into_push_pull_output(&mut gpiob.crh);
+    let mut enable2 = gpiob.pb7.into_push_pull_output(&mut gpiob.crl);
+
 
     // Wait for the timer to trigger an update and change the state of the LED
     loop {
         // led.set_high();
         // delay.delay_ms(1_000_u16);
-        // led.set_low();
-        stepper_driver.step();
+        led.set_low();
         // delay.delay(1.secs());
+        enable1.set_low();
+        enable2.set_low();
+
+        stepper_driver.step(&mut delay);
+        stepper_driver2.step(&mut delay);
+        delay.delay_ms(50_u16);
     }
 }
