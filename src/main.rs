@@ -1,9 +1,3 @@
-//! Blinks an LED
-//!
-//! This assumes that a LED is connected to pc13 as is the case on the blue pill board.
-//!
-//! Note: Without additional hardware, PC13 should not be used to drive an LED, see page 5.1.2 of
-//! the reference manual for an explanation. This is not an issue on the blue pill.
 
 #![deny(unsafe_code)]
 #![no_std]
@@ -41,8 +35,6 @@ fn main() -> ! {
     let mut gpioc = dp.GPIOC.split();
 
     let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
-    // let mut dir = gpiob.pb12.into_push_pull_output(&mut gpiob.crh);
-    // let mut step = gpiob.pb13.into_push_pull_output(&mut gpiob.crh);
 
     let mut stepper_driver = StepperDriver::new(
         gpiob.pb13.into_push_pull_output(&mut gpiob.crh),
@@ -59,7 +51,6 @@ fn main() -> ! {
     let mut time_counter = Timer::syst(cp.SYST, &clocks).counter_us();
     _ = time_counter.start(1.secs());
 
-    // Wait for the timer to trigger an update and change the state of the LED
     loop {
         let time = time_counter.now();
 
@@ -69,10 +60,7 @@ fn main() -> ! {
         else {
             led.set_low();
         }
-        // delay.delay_ms(1_000_u16);
-        // delay.delay(1.secs());
-        // hprintln!("Hello, world!");
-        hprintln!("time {}", time.ticks());
+        // hprintln!("time {}", time.ticks());
         stepper_driver.step(&mut delay);
         stepper_driver2.step(&mut delay);
         delay.delay_us(10000_u16);
