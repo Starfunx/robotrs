@@ -15,13 +15,15 @@ impl Default for StepperDriverConfig {
 }
 
 
-pub struct StepperDriver<Step, Dir, Delay>
+pub struct StepperDriver<Step, Dir, Enable, Delay>
 where
     Step:   OutputPin,
     Dir:    OutputPin,
+    Enable: OutputPin,
 {
-    step_pin: Step, 
-    dir_pin:  Dir,
+    step_pin:   Step, 
+    dir_pin:    Dir,
+    enable_pin: Enable,
 
     _config: StepperDriverConfig,
 
@@ -31,27 +33,31 @@ where
 
 
 
-impl<Step, Dir, Delay> StepperDriver<Step, Dir, Delay> 
+impl<Step, Dir, Enable, Delay> StepperDriver<Step, Dir, Enable, Delay> 
 where
     Step:   OutputPin,
     Dir:    OutputPin,
+    Enable: OutputPin,
     Delay:  DelayUs<u8>,
 {
-    pub fn new(step_pin: Step, dir_pin: Dir) -> Self {
+    pub fn new(step_pin: Step, mut dir_pin: Dir, mut enable_pin: Enable) -> Self {
+        _ = dir_pin.set_low();
+        _ = enable_pin.set_low(); // enable motor with pin enable\
 
         Self {
             dir_pin,
             step_pin,
+            enable_pin,
             _config: StepperDriverConfig::default(),
             _delay: PhantomData,
         }
     }
 
     pub fn step(&mut self, delay:&mut Delay) {
-        _ = self.dir_pin.set_high();
         _ = self.step_pin.set_high();  
         delay.delay_us(1);      
         _ = self.step_pin.set_low();
-        // delay.release();
-     }  
+    }  
+
+    // pub fn update(&mut self, timee: )
 }

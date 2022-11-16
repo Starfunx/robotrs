@@ -10,9 +10,15 @@
 #![no_main]
 
 use panic_halt as _;
+// use panic_semihosting as _;
+
+use cortex_m_semihosting::hprintln;
 
 use cortex_m_rt::entry;
 use stm32f1xx_hal::{pac, prelude::*};
+use stm32f1xx_hal as hal;
+use hal::timer::Timer;
+use hal::timer::TimerExt;
 
 mod stepper_driver;
 use stepper_driver::StepperDriver;
@@ -27,7 +33,9 @@ fn main() -> ! {
 
     let clocks = rcc.cfgr.freeze(&mut flash.acr);
     
-    let mut delay = cp.SYST.delay(&clocks);
+    // let mut delay = cp.SYST.delay(&clocks);
+    // let mut delay = hal::timer::Timer::syst(cp.SYST, &clocks).delay();
+    let mut delay = dp.TIM2.delay_us(&clocks);
 
     let mut gpiob = dp.GPIOB.split();
     let mut gpioc = dp.GPIOC.split();
@@ -38,29 +46,35 @@ fn main() -> ! {
 
     let mut stepper_driver = StepperDriver::new(
         gpiob.pb13.into_push_pull_output(&mut gpiob.crh),
-        gpiob.pb12.into_push_pull_output(&mut gpiob.crh)
+        gpiob.pb12.into_push_pull_output(&mut gpiob.crh),
+        gpiob.pb14.into_push_pull_output(&mut gpiob.crh)
     );
 
     let mut stepper_driver2 = StepperDriver::new(
         gpiob.pb6.into_push_pull_output(&mut gpiob.crl),
-        gpiob.pb5.into_push_pull_output(&mut gpiob.crl)
+        gpiob.pb5.into_push_pull_output(&mut gpiob.crl),
+        gpiob.pb7.into_push_pull_output(&mut gpiob.crl)
     );
     
-    let mut enable1 = gpiob.pb14.into_push_pull_output(&mut gpiob.crh);
-    let mut enable2 = gpiob.pb7.into_push_pull_output(&mut gpiob.crl);
-
+    let mut time_counter = Timer::syst(cp.SYST, &clocks).counter_us();
+    _ = time_counter.start(1.secs());
 
     // Wait for the timer to trigger an update and change the state of the LED
     loop {
-        // led.set_high();
-        // delay.delay_ms(1_000_u16);
-        led.set_low();
-        // delay.delay(1.secs());
-        enable1.set_low();
-        enable2.set_low();
+        let time = time_counter.now();
 
+        if (time.ticks() / 100000)%2 == 0 {
+            led.set_high();
+        }
+        else {
+            led.set_low();
+        }
+        // delay.delay_ms(1_000_u16);
+        // delay.delay(1.secs());
+        // hprintln!("Hello, world!");
+        hprintln!("time {}", time.ticks());
         stepper_driver.step(&mut delay);
         stepper_driver2.step(&mut delay);
-        delay.delay_ms(50_u16);
+        delay.delay_us(10000_u16);
     }
 }
