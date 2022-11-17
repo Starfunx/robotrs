@@ -23,17 +23,20 @@ fn main() -> ! {
     let cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
+    
     let rcc = dp.RCC.constrain();
-
     let clocks = rcc.cfgr
         .use_hse(8.MHz())
-        .sysclk(70.MHz())
         .freeze(&mut flash.acr);
     
-    // let mut delay = cp.SYST.delay(&clocks);
-    // let mut delay = hal::timer::Timer::syst(cp.SYST, &clocks).delay();
+    // Create a delay abstraction based on general-pupose 32-bit timer TIM2
+
+    //let mut delay = hal::timer::FTimerUs::new(dp.TIM2, &clocks).delay();
+    // or
     let mut delay = dp.TIM2.delay_us(&clocks);
 
+
+    // Setup gpios
     let mut gpiob = dp.GPIOB.split();
     let mut gpioc = dp.GPIOC.split();
 
@@ -51,7 +54,10 @@ fn main() -> ! {
         gpiob.pb7.into_push_pull_output(&mut gpiob.crl)
     );
     
-    let mut time_counter = Timer::syst(cp.SYST, &clocks).counter_us();
+    // let mut time_counter = hal::timer::Timer::syst(cp.SYST, &clocks).counter_us();
+    // or
+    let mut time_counter = cp.SYST.counter_us(&clocks);
+
     _ = time_counter.start(1.secs());
 
     loop {
@@ -66,6 +72,6 @@ fn main() -> ! {
         hprintln!("time {}", time.ticks());
         stepper_driver.step(&mut delay);
         stepper_driver2.step(&mut delay);
-        delay.delay_us(10000_u16);
+        // delay.delay_us(10000_u16);
     }
 }
