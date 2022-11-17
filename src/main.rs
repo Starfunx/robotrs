@@ -25,7 +25,10 @@ fn main() -> ! {
     let mut flash = dp.FLASH.constrain();
     let rcc = dp.RCC.constrain();
 
-    let clocks = rcc.cfgr.freeze(&mut flash.acr);
+    let clocks = rcc.cfgr
+        .use_hse(8.MHz())
+        .sysclk(70.MHz())
+        .freeze(&mut flash.acr);
     
     // let mut delay = cp.SYST.delay(&clocks);
     // let mut delay = hal::timer::Timer::syst(cp.SYST, &clocks).delay();
@@ -54,13 +57,13 @@ fn main() -> ! {
     loop {
         let time = time_counter.now();
 
-        if (time.ticks() / 100000)%2 == 0 {
+        if (time.ticks() / 1_000_000)%2 == 0 {
             led.set_high();
         }
         else {
             led.set_low();
         }
-        // hprintln!("time {}", time.ticks());
+        hprintln!("time {}", time.ticks());
         stepper_driver.step(&mut delay);
         stepper_driver2.step(&mut delay);
         delay.delay_us(10000_u16);
