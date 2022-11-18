@@ -1,9 +1,8 @@
 
-// #![deny(unsafe_code)]
+#![deny(unsafe_code)]
 #![no_std]
 #![no_main]
 
-use core::str::Bytes;
 
 // use panic_halt as _;
 use panic_semihosting as _;
@@ -13,15 +12,11 @@ use cortex_m_semihosting::hprintln;
 use cortex_m_rt::entry;
 use stm32f1xx_hal::{pac, prelude::*};
 use stm32f1xx_hal as hal;
-use hal::timer::Timer;
 use hal::timer::TimerExt;
-
-use fugit::Duration;
 
 mod stepper_driver;
 use stepper_driver::StepperDriver;
 
-use cortex_m::peripheral::SYST;
 
 #[entry]
 fn main() -> ! {
@@ -29,9 +24,7 @@ fn main() -> ! {
     let cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
-    
-    dp.RCC.apb2enr.write(|w| unsafe { w.tim1en().set_bit() }); // enable timer 1 clock 
-    let rcc = dp.RCC.constrain();
+        let rcc = dp.RCC.constrain();
     
 
 
@@ -73,10 +66,7 @@ fn main() -> ! {
 
     loop {
 
-        let cycle_counts = hal::pac::DWT::cycle_count();
-        // hprintln!("cycle_counts {}", cycle_counts);
-        let time_us = cycle_counts/(8_000_000/1_000_000);
-        // hprintln!("time {}", time_us);
+        let time_us = micros();
         
 
         if (time_us / 1_000_000)%2 == 0 {
@@ -89,4 +79,9 @@ fn main() -> ! {
         stepper_driver2.step(&mut delay);
         // delay.delay_us(10000_u16);
     }
+}
+
+fn micros() -> u32 {
+    let cycle_counts = hal::pac::DWT::cycle_count();
+    cycle_counts/(8_000_000/1_000_000)
 }
