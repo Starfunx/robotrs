@@ -4,10 +4,10 @@
 #![no_main]
 
 
-// use panic_halt as _;
-use panic_semihosting as _;
+use panic_halt as _;
+// use panic_semihosting as _;
 
-use cortex_m_semihosting::hprintln;
+// use cortex_m_semihosting::hprintln;
 
 use cortex_m_rt::entry;
 use stm32f1xx_hal::{pac, prelude::*};
@@ -30,7 +30,7 @@ fn main() -> ! {
 
     let clocks = rcc.cfgr
         .use_hse(8.MHz())
-        .hclk(72.MHz())
+        .sysclk(72.MHz())
         .freeze(&mut flash.acr);
 
 
@@ -47,19 +47,22 @@ fn main() -> ! {
 
     let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
 
-    let mut stepper_driver = StepperDriver::new(
-        gpiob.pb13.into_push_pull_output(&mut gpiob.crh),
-        gpiob.pb12.into_push_pull_output(&mut gpiob.crh),
-        gpiob.pb14.into_push_pull_output(&mut gpiob.crh)
-    );
+    // let mut stepper_driver = StepperDriver::new(
+    //     gpiob.pb13.into_push_pull_output(&mut gpiob.crh),
+    //     gpiob.pb12.into_push_pull_output(&mut gpiob.crh),
+    //     gpiob.pb14.into_push_pull_output(&mut gpiob.crh)
+    // );
 
-    let mut stepper_driver2 = StepperDriver::new(
-        gpiob.pb6.into_push_pull_output(&mut gpiob.crl),
-        gpiob.pb5.into_push_pull_output(&mut gpiob.crl),
-        gpiob.pb7.into_push_pull_output(&mut gpiob.crl)
-    );
+    // let mut stepper_driver2 = StepperDriver::new(
+    //     gpiob.pb6.into_push_pull_output(&mut gpiob.crl),
+    //     gpiob.pb5.into_push_pull_output(&mut gpiob.crl),
+    //     gpiob.pb7.into_push_pull_output(&mut gpiob.crl)
+    // );
     
 
+    let mut syst = cp.SYST;
+    // hprintln!("syst clock source {:?}", syst.get_clock_source());
+    // hprintln!("ticks per 10ms {:?}", cortex_m::peripheral::SYST::get_ticks_per_10ms());
 
     let mut dwt = cp.DWT;
     dwt.enable_cycle_counter();
@@ -75,8 +78,8 @@ fn main() -> ! {
         else {
             led.set_low();
         }
-        stepper_driver.step(&mut delay);
-        stepper_driver2.step(&mut delay);
+        // stepper_driver.step(&mut delay);
+        // stepper_driver2.step(&mut delay);
         // delay.delay_us(10000_u16);
     }
 }
@@ -85,5 +88,5 @@ fn main() -> ! {
 //require dwt cycle counter to be enabled
 fn micros() -> u32 {
     let cycle_counts = hal::pac::DWT::cycle_count();
-    cycle_counts/(8_000_000/1_000_000)
+    cycle_counts/(72_000_000/1_000_000)
 }
