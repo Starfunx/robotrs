@@ -81,6 +81,8 @@ fn main() -> ! {
     }
 }
 
+// time elapsed since reset in microsecond
+//require dwt cycle counter to be enabled
 fn micros() -> u32 {
     let cycle_counts = hal::pac::DWT::cycle_count();
     cycle_counts/(8_000_000/1_000_000)
