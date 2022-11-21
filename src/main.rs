@@ -82,6 +82,8 @@ fn main() -> ! {
     loop {
         let time = micros!();
         
+        // hprintln!("CNT {:?}", time);
+
         if (time / 1_000_000)%2 == 0 {
             led.set_high();
         }
@@ -92,30 +94,20 @@ fn main() -> ! {
 }
 
 
-// struct GlobalTime {
-//     overflow_count: u32,
-// }
+struct Clock;
 
 global_clock!(Clock);
-struct Clock;
 
 impl GlobalClock for Clock {
     fn micros(&self) -> u32 {
-        static mut TIM: Option<CounterUs<TIM2>> = None;
-
-        let time: u32;
-        unsafe {
-
-            let tim = TIM.get_or_insert_with(|| {
-                cortex_m::interrupt::free(|cs| {
-                    G_TIM.borrow(cs).replace(None).unwrap()
-                })
-            });
-            time = tim.now().ticks();
-        }
+        let time = cortex_m::interrupt::free( move |cs| {
+            let tim = G_TIM.borrow(cs).borrow();
+            let time: u32 = tim.as_ref().unwrap().now().ticks();
+            time
+        });
 
 
-        time
+        time as u32
     }
 
 
@@ -125,19 +117,15 @@ impl GlobalClock for Clock {
 
 #[interrupt]
 fn TIM2() {
-    static mut TIM: Option<CounterUs<TIM2>> = None;
 
-    let tim = TIM.get_or_insert_with(|| {
-        cortex_m::interrupt::free(|cs| {
-            G_TIM.borrow(cs).replace(None).unwrap()
-        })
+    cortex_m::interrupt::free(|cs| {
+        let mut tim = G_TIM.borrow(cs).borrow_mut();
+        // gpioa.as_ref().unwrap().idr.read().idr0().bit_is_set()
+        tim.as_mut().unwrap().clear_interrupt(Event::Update);
+        let timer = tim.as_mut().unwrap(); 
+        // hprintln!("CNT_int {:?}", timer.now().ticks());
     });
 
-
-    hprintln!("CNT {:?}", tim.now().ticks());
-
-    // let _ = tim.wait();
-    tim.clear_interrupt(Event::Update);
 }
 
 
