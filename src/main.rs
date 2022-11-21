@@ -94,9 +94,11 @@ fn main() -> ! {
 }
 
 
-struct Clock;
+struct Clock{
+    overflow_count:u16,
+}
 
-global_clock!(Clock);
+global_clock!(Clock{overflow_count: 0 });
 
 impl GlobalClock for Clock {
     fn micros(&self) -> u32 {
@@ -108,16 +110,12 @@ impl GlobalClock for Clock {
 
 
         time as u32
-    }
-
-
-    
+    }    
 }
 
 
 #[interrupt]
 fn TIM2() {
-
     cortex_m::interrupt::free(|cs| {
         let mut tim = G_TIM.borrow(cs).borrow_mut();
         // gpioa.as_ref().unwrap().idr.read().idr0().bit_is_set()
@@ -125,6 +123,8 @@ fn TIM2() {
         let timer = tim.as_mut().unwrap(); 
         // hprintln!("CNT_int {:?}", timer.now().ticks());
     });
+
+    // inc overflow count
 
 }
 

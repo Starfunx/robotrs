@@ -34,8 +34,6 @@ macro_rules! micros {
 
 }
 
-
-
 // NEW!
 #[macro_export]
 macro_rules! global_clock {
