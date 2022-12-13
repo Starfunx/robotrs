@@ -36,19 +36,16 @@ use cortex_m::{interrupt::Mutex};
 
 // Make timer interrupt registers globally available
 static G_TIM: Mutex<RefCell<Option<CounterUs<TIM2>>>> = Mutex::new(RefCell::new(None));
+static G_OVF: Mutex<RefCell<Option<u32>>> = Mutex::new(RefCell::new(Some(0 as u32)));
 
 
 #[entry]
 fn main() -> ! {
-    // Get access to the core peripherals from the cortex-m crate
     let cp = cortex_m::Peripherals::take().unwrap();
-    // Get access to the device specific peripherals from the peripheral access crate
     let dp = pac::Peripherals::take().unwrap();
 
-    // Take ownership over the raw flash and rcc devices and convert them into the corresponding
-    // HAL structs
     let mut flash = dp.FLASH.constrain();
-        let rcc = dp.RCC.constrain();
+    let rcc = dp.RCC.constrain();
 
     let clocks = rcc.cfgr
         .use_hse(8.MHz())
@@ -56,34 +53,27 @@ fn main() -> ! {
         .freeze(&mut flash.acr);
 
 
+    // timer 2
     let mut timer = dp.TIM2.counter_us(&clocks);
     timer.start(65535.micros()).unwrap();
-
     timer.listen(Event::Update);
-
-    let tim = TIM2::ptr();
-
 
     // Move the timer into our global storage
     cortex_m::interrupt::free(|cs| *G_TIM.borrow(cs).borrow_mut() = Some(timer));
 
-
+    // enable tim2 interupt in nvic
     unsafe {
         cortex_m::peripheral::NVIC::unmask(Interrupt::TIM2);
     }
 
 
     // Setup gpios
-    let mut gpiob = dp.GPIOB.split();
     let mut gpioc = dp.GPIOC.split();
-
     let mut led = gpioc.pc13.into_push_pull_output(&mut gpioc.crh);
         
     loop {
         let time = micros!();
         
-        // hprintln!("CNT {:?}", time);
-
         if (time / 1_000_000)%2 == 0 {
             led.set_high();
         }
@@ -102,14 +92,14 @@ global_clock!(Clock{overflow_count: 0 });
 
 impl GlobalClock for Clock {
     fn micros(&self) -> u32 {
-        let time = cortex_m::interrupt::free( move |cs| {
+        let (time, ovf) = cortex_m::interrupt::free( move |cs| {
             let tim = G_TIM.borrow(cs).borrow();
             let time: u32 = tim.as_ref().unwrap().now().ticks();
-            time
+            let mut ovf_count = G_OVF.borrow(cs).borrow_mut().unwrap();
+            (time, ovf_count)
         });
 
-
-        time as u32
+        ((ovf as u32) << 16) + time as u32
     }    
 }
 
@@ -120,11 +110,18 @@ fn TIM2() {
         let mut tim = G_TIM.borrow(cs).borrow_mut();
         // gpioa.as_ref().unwrap().idr.read().idr0().bit_is_set()
         tim.as_mut().unwrap().clear_interrupt(Event::Update);
-        let timer = tim.as_mut().unwrap(); 
-        // hprintln!("CNT_int {:?}", timer.now().ticks());
     });
 
-    // inc overflow count
+
+    let value = cortex_m::interrupt::free(|cs| {
+        // inc overflow count
+        G_OVF.borrow(cs).borrow_mut().unwrap()
+    });
+    cortex_m::interrupt::free(|cs| {
+        // inc overflow count
+        *G_OVF.borrow(cs).borrow_mut() = Some(value+1);
+    });
+
 
 }
 

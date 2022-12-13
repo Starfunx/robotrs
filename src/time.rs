@@ -42,3 +42,33 @@ macro_rules! global_clock {
         pub static CLOCK: &dyn $crate::GlobalClock = &$clock;
     };
 }
+
+#[macro_export]
+macro_rules! get_clock {
+    // NEW!
+    () => {
+        unsafe {
+            extern "Rust" {
+                static CLOCK: &'static dyn $crate::GlobalClock;
+            }
+
+            CLOCK
+        }
+    };
+
+}
+
+// #[macro_export]
+// macro_rules! inc_overflow {
+//     // NEW!
+//     () => {
+//         unsafe {
+//             extern "Rust" {
+//                 static CLOCK: &'static dyn $crate::GlobalClock;
+//             }
+
+//             CLOCK.overflow_count +=1;
+//         }
+//     };
+
+// }
