@@ -1,5 +1,5 @@
 
-#![deny(unsafe_code)]
+// #![deny(unsafe_code)]
 #![no_std]
 #![no_main]
 
@@ -17,9 +17,38 @@ use hal::timer::TimerExt;
 mod stepper_driver;
 use stepper_driver::StepperDriver;
 
+// use panic_halt as _;
+use panic_semihosting as _;
+
+use cortex_m_semihosting::hprintln;
+
+use cortex_m_rt::entry;
+
+use stm32f1xx_hal as hal;
+use hal::{
+    prelude::*,
+    pac
+};
+use pac::{interrupt, Interrupt, TIM2};
+
+use hal::timer::TimerExt;
+use hal::timer::{Event, CounterUs};
+
+
+mod time;
+use time::{GlobalClock};
+
+use core::cell::RefCell;
+use cortex_m::{interrupt::Mutex};
+
+// Make timer interrupt registers globally available
+static G_TIM: Mutex<RefCell<Option<CounterUs<TIM2>>>> = Mutex::new(RefCell::new(None));
+static G_OVF: Mutex<RefCell<Option<u32>>> = Mutex::new(RefCell::new(Some(0 as u32)));
+
 
 #[entry]
 fn main() -> ! {
+    let cp = cortex_m::Peripherals::take().unwrap();
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();
 
@@ -69,7 +98,7 @@ fn main() -> ! {
 
     loop {
 
-        let time_us = micros();
+        let time_us = micros!();
         
 
         if (time_us / 1_000_000)%2 == 0 {
@@ -78,15 +107,50 @@ fn main() -> ! {
         else {
             led.set_low();
         }
-        // stepper_driver.step(&mut delay);
-        // stepper_driver2.step(&mut delay);
-        // delay.delay_us(10000_u16);
     }
 }
 
-// time elapsed since reset in microsecond
-//require dwt cycle counter to be enabled
-fn micros() -> u32 {
-    let cycle_counts = hal::pac::DWT::cycle_count();
-    cycle_counts/(72_000_000/1_000_000)
+
+struct Clock{
+    overflow_count:u16,
 }
+
+global_clock!(Clock{overflow_count: 0 });
+
+impl GlobalClock for Clock {
+    fn micros(&self) -> u32 {
+        let (time, ovf) = cortex_m::interrupt::free( move |cs| {
+            let tim = G_TIM.borrow(cs).borrow();
+            let time: u32 = tim.as_ref().unwrap().now().ticks();
+            let mut ovf_count = G_OVF.borrow(cs).borrow_mut().unwrap();
+            (time, ovf_count)
+        });
+
+        ((ovf as u32) << 16) + time as u32
+    }    
+}
+
+
+#[interrupt]
+fn TIM2() {
+    cortex_m::interrupt::free(|cs| {
+        let mut tim = G_TIM.borrow(cs).borrow_mut();
+        // gpioa.as_ref().unwrap().idr.read().idr0().bit_is_set()
+        tim.as_mut().unwrap().clear_interrupt(Event::Update);
+    });
+
+
+    let value = cortex_m::interrupt::free(|cs| {
+        // inc overflow count
+        G_OVF.borrow(cs).borrow_mut().unwrap()
+    });
+    cortex_m::interrupt::free(|cs| {
+        // inc overflow count
+        *G_OVF.borrow(cs).borrow_mut() = Some(value+1);
+    });
+
+
+}
+
+
+
