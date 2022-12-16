@@ -1,4 +1,3 @@
-#![no_std]
 
 pub trait GlobalClock: Sync {
     fn micros(&self) -> u32;
