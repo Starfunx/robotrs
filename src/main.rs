@@ -85,8 +85,6 @@ fn main() -> ! {
         gpiob.pb7.into_push_pull_output(&mut gpiob.crl)
     );
     
-    stepper_driver_left.setSpeed(800f32);
-    stepper_driver_right.setSpeed(800f32);
 
     loop {
 
@@ -100,6 +98,13 @@ fn main() -> ! {
             led.set_low();
         }
 
+        // compute new speeds
+
+        // update speed
+        stepper_driver_left.setSpeed(800f32);
+        stepper_driver_right.setSpeed(800f32);
+
+        // run stepper driver
         stepper_driver_left.runSpeed(&mut delay);
         stepper_driver_right.runSpeed(&mut delay);
     }
