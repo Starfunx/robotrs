@@ -5,11 +5,83 @@
 //! Note: Without additional hardware, PC13 should not be used to drive an LED, see page 5.1.2 of
 //! the reference manual for an explanation. This is not an issue on the blue pill.
 
-#![deny(unsafe_code)]
+// #![deny(unsafe_code)]
 #![no_std]
 #![no_main]
+#![feature(alloc_error_handler)]
+
+
+use cortex_m::asm;
+
+#[alloc_error_handler]
+fn on_oom(_layout: Layout) -> ! {
+    asm::bkpt();
+
+    loop {}
+}
+
+extern crate alloc;
+use alloc::vec::Vec;
+
+
+// Bump pointer allocator implementation
+
+use core::alloc::{GlobalAlloc, Layout};
+use core::cell::UnsafeCell;
+use core::ptr;
+
+use cortex_m::interrupt;
+
+
+// Bump pointer allocator for *single* core systems
+struct BumpPointerAlloc {
+    head: UnsafeCell<usize>,
+    end: usize,
+}
+
+unsafe impl Sync for BumpPointerAlloc {}
+
+unsafe impl GlobalAlloc for BumpPointerAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        // `interrupt::free` is a critical section that makes our allocator safe
+        // to use from within interrupts
+        interrupt::free(|_| {
+            let head = self.head.get();
+            let size = layout.size();
+            let align = layout.align();
+            let align_mask = !(align - 1);
+
+            // move start up to the next alignment boundary
+            let start = (*head + align - 1) & align_mask;
+
+            if start + size > self.end {
+                // a null pointer signal an Out Of Memory condition
+                ptr::null_mut()
+            } else {
+                *head = start + size;
+                start as *mut u8
+            }
+        })
+    }
+
+    unsafe fn dealloc(&self, _: *mut u8, _: Layout) {
+        // this allocator never deallocates memory
+    }
+}
+
+// Declaration of the global memory allocator
+// NOTE the user must ensure that the memory region `[0x2000_0100, 0x2000_0200]`
+// is not used by other parts of the program
+#[global_allocator]
+static HEAP: BumpPointerAlloc = BumpPointerAlloc {
+    head: UnsafeCell::new(0x2000_0100),
+    end: 0x2000_0200,
+};
+
+
 
 use panic_halt as _;
+use cortex_m_semihosting::hprintln;
 
 use nb::block;
 
@@ -41,6 +113,12 @@ fn main() -> ! {
     // Configure the syst timer to trigger an update every second
     let mut timer = Timer::syst(cp.SYST, &clocks).counter_hz();
     timer.start(1.Hz()).unwrap();
+
+    let mut xs = Vec::new();
+
+    xs.push(42);
+    assert!(true);
+    assert_eq!(xs.pop(), Some(42));
 
     // Wait for the timer to trigger an update and change the state of the LED
     loop {
