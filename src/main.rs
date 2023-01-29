@@ -20,7 +20,6 @@ mod allocator;
 use allocator::Heap;
 
 use core::alloc::Layout;
-use core::cell::UnsafeCell;
 
 use nb::block;
 
@@ -42,10 +41,7 @@ use panic_halt as _;
 // NOTE the user must ensure that the memory region `[0x2000_0100, 0x2000_0200]`
 // is not used by other parts of the program
 #[global_allocator]
-static HEAP: Heap = Heap {
-    head: UnsafeCell::new(0x2000_0100),
-    end: 0x2000_0200,
-};
+static HEAP: Heap = Heap::empty();
 
 #[alloc_error_handler]
 fn on_oom(_layout: Layout) -> ! {
@@ -57,6 +53,16 @@ fn on_oom(_layout: Layout) -> ! {
 
 #[entry]
 fn main() -> ! {
+
+    // Initialize the allocator BEFORE you use it
+    {
+        use core::mem::MaybeUninit;
+        const HEAP_SIZE: usize = 1024;
+        static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+        unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
+    }
+
+
     // Get access to the core peripherals from the cortex-m crate
     let cp = cortex_m::Peripherals::take().unwrap();
     // Get access to the device specific peripherals from the peripheral access crate
@@ -85,7 +91,6 @@ fn main() -> ! {
     let mut xs = Vec::new();
 
     xs.push(42);
-    assert!(true);
     assert_eq!(xs.pop(), Some(42));
 
     // Wait for the timer to trigger an update and change the state of the LED
