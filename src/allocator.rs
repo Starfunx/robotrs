@@ -8,15 +8,15 @@ use cortex_m::interrupt;
 
 
 // Bump pointer allocator for *single* core systems
-pub struct BumpPointerAlloc {
+pub struct Heap {
     pub head: UnsafeCell<usize>,
     pub end: usize,
 }
 
-unsafe impl Sync for BumpPointerAlloc {}
+unsafe impl Sync for Heap {}
 
 // Bump pointer allocator implementation
-unsafe impl GlobalAlloc for BumpPointerAlloc {
+unsafe impl GlobalAlloc for Heap {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         // `interrupt::free` is a critical section that makes our allocator safe
         // to use from within interrupts
