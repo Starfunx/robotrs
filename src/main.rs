@@ -22,6 +22,8 @@ use alloc::vec::Vec;
 mod allocator;
 use allocator::Heap;
 
+mod commands;
+
 mod stepper_driver;
 use stepper_driver::StepperDriver;
 
