@@ -3,17 +3,15 @@
 #![no_main]
 #![feature(alloc_error_handler)]
 
-use nb::block;
-
 use cortex_m::asm;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 
-use hal::serial::{self, Serial};
+use stm32f1xx_hal as hal;
+use hal::serial::{self, Config, Rx, Serial, Tx};
 use hal::timer::{CounterUs, Event, TimerExt};
 use hal::{pac, prelude::*};
-use pac::{interrupt, Interrupt, TIM2};
-use stm32f1xx_hal as hal;
+use pac::{interrupt, Interrupt, TIM2, USART1};
 
 use core::alloc::Layout;
 use core::cell::RefCell;
@@ -31,8 +29,6 @@ use stepper_driver::StepperDriver;
 
 mod time;
 use time::GlobalClock;
-
-use unwrap_infallible::UnwrapInfallible;
 
 // use cortex_m_semihosting::hprintln;
 
@@ -54,6 +50,9 @@ static HEAP: Heap = Heap::empty();
 static G_TIM: Mutex<RefCell<Option<CounterUs<TIM2>>>> = Mutex::new(RefCell::new(None));
 static G_OVF: Mutex<RefCell<Option<u16>>> = Mutex::new(RefCell::new(Some(0 as u16)));
 
+static mut RX: Option<Rx<USART1>> = None;
+static mut TX: Option<Tx<USART1>> = None;
+
 #[entry]
 fn main() -> ! {
     // Initialize the allocator BEFORE you use it
@@ -65,7 +64,7 @@ fn main() -> ! {
     }
 
     // Get access to the core peripherals from the cortex-m crate
-    let cp = cortex_m::Peripherals::take().unwrap();
+    let _cp = cortex_m::Peripherals::take().unwrap();
     let dp = pac::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
@@ -83,10 +82,6 @@ fn main() -> ! {
 
     // Move the timer into our global storage
     cortex_m::interrupt::free(|cs| *G_TIM.borrow(cs).borrow_mut() = Some(timer));
-
-    unsafe {
-        cortex_m::peripheral::NVIC::unmask(Interrupt::TIM2);
-    }
 
     let mut delay = dp.TIM3.delay_us(&clocks);
 
@@ -122,7 +117,7 @@ fn main() -> ! {
         dp.USART1,
         (tx, rx),
         &mut afio.mapr,
-        serial::Config::default()
+        Config::default()
             .baudrate(9600.bps())
             .stopbits(serial::StopBits::STOP2)
             .wordlength_9bits()
@@ -131,11 +126,21 @@ fn main() -> ! {
     );
 
     // Split the serial struct into a receiving and a transmitting part
-    let (mut tx, _rx) = serial.split();
+    let (mut tx, mut rx) = serial.split();
 
-    block!(tx.write( b'U')).unwrap_infallible();
-    block!(tx.write( b'w')).unwrap_infallible();
-    block!(tx.write( b'U')).unwrap_infallible();
+    tx.listen();
+    rx.listen();
+    // rx.listen_idle();
+
+    cortex_m::interrupt::free(|_| unsafe {
+        TX.replace(tx);
+        RX.replace(rx);
+    });
+
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(Interrupt::TIM2);
+        cortex_m::peripheral::NVIC::unmask(pac::Interrupt::USART1);
+    }
 
     loop {
         let time_us = micros!();
@@ -196,4 +201,42 @@ fn on_oom(_layout: Layout) -> ! {
     asm::bkpt();
 
     loop {}
+}
+
+
+
+const BUFFER_LEN: usize = 4096;
+static mut BUFFER: &mut [u8; BUFFER_LEN] = &mut [0; BUFFER_LEN];
+static mut WIDX: usize = 0;
+
+unsafe fn write(buf: &[u8]) {
+    if let Some(tx) = TX.as_mut() {
+        buf.iter()
+            .for_each(|w| if let Err(_err) = nb::block!(tx.write(*w)) {})
+    }
+}
+
+#[interrupt]
+unsafe fn USART1() {
+    cortex_m::interrupt::free(|_| {
+        if let Some(rx) = RX.as_mut() {
+            if rx.is_rx_not_empty() {
+                if let Ok(w) = nb::block!(rx.read()) {
+                    // BUFFER[WIDX] = w;
+                    // WIDX += 1;
+                    // if WIDX >= BUFFER_LEN - 1 {
+                    //     write(&BUFFER[..]);
+                    //     WIDX = 0;
+                    // }
+                    write(&[w]);
+                }
+                rx.listen_idle();
+            } else if rx.is_idle() {
+                rx.unlisten_idle();
+                let a = &BUFFER[0..WIDX];
+                write(&BUFFER[0..WIDX]);
+                WIDX = 0;
+            }
+        }
+    })
 }
