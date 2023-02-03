@@ -3,10 +3,13 @@
 #![no_main]
 #![feature(alloc_error_handler)]
 
+use nb::block;
+
 use cortex_m::asm;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
 
+use hal::serial::{self, Serial};
 use hal::timer::{CounterUs, Event, TimerExt};
 use hal::{pac, prelude::*};
 use pac::{interrupt, Interrupt, TIM2};
@@ -17,7 +20,6 @@ use core::cell::RefCell;
 use core::ops::DerefMut;
 
 extern crate alloc;
-use alloc::vec::Vec;
 
 mod allocator;
 use allocator::Heap;
@@ -29,6 +31,8 @@ use stepper_driver::StepperDriver;
 
 mod time;
 use time::GlobalClock;
+
+use unwrap_infallible::UnwrapInfallible;
 
 // use cortex_m_semihosting::hprintln;
 
@@ -86,7 +90,11 @@ fn main() -> ! {
 
     let mut delay = dp.TIM3.delay_us(&clocks);
 
+    // Prepare the alternate function I/O registers
+    let mut afio = dp.AFIO.constrain();
+
     // Setup gpios
+    let mut gpioa = dp.GPIOA.split();
     let mut gpiob = dp.GPIOB.split();
     let mut gpioc = dp.GPIOC.split();
 
@@ -103,6 +111,31 @@ fn main() -> ! {
         gpiob.pb5.into_push_pull_output(&mut gpiob.crl),
         gpiob.pb7.into_push_pull_output(&mut gpiob.crl),
     );
+
+    // USART1
+    let tx = gpioa.pa9.into_alternate_push_pull(&mut gpioa.crh);
+    let rx = gpioa.pa10;
+
+    // Set up the usart device. Take ownership over the USART register and tx/rx pins. The rest of
+    // the registers are used to enable and configure the device.
+    let serial = Serial::new(
+        dp.USART1,
+        (tx, rx),
+        &mut afio.mapr,
+        serial::Config::default()
+            .baudrate(9600.bps())
+            .stopbits(serial::StopBits::STOP2)
+            .wordlength_9bits()
+            .parity_odd(),
+        &clocks,
+    );
+
+    // Split the serial struct into a receiving and a transmitting part
+    let (mut tx, _rx) = serial.split();
+
+    block!(tx.write( b'U')).unwrap_infallible();
+    block!(tx.write( b'w')).unwrap_infallible();
+    block!(tx.write( b'U')).unwrap_infallible();
 
     loop {
         let time_us = micros!();
