@@ -3,6 +3,8 @@
 #![no_main]
 #![feature(alloc_error_handler)]
 
+// #[allow(dead_code)]
+
 use cortex_m::asm;
 use cortex_m::interrupt::Mutex;
 use cortex_m_rt::entry;
@@ -14,6 +16,7 @@ use hal::{pac, prelude::*};
 use pac::{interrupt, Interrupt, TIM2, USART1};
 
 use core::alloc::Layout;
+use core::borrow::Borrow;
 use core::cell::RefCell;
 use core::ops::DerefMut;
 
@@ -21,8 +24,10 @@ extern crate alloc;
 
 mod allocator;
 use allocator::Heap;
+use hashbrown::HashMap;
 
 mod commands;
+use commands::{Command, CommandParser};
 
 mod stepper_driver;
 use stepper_driver::StepperDriver;
@@ -33,8 +38,8 @@ use time::GlobalClock;
 // use cortex_m_semihosting::hprintln;
 
 // panic error handler
-use panic_halt as _;
-// use panic_semihosting as _;
+// use panic_halt as _;
+use panic_semihosting as _;
 
 // use core::panic::PanicInfo;
 // #[panic_handler]
@@ -50,9 +55,10 @@ static HEAP: Heap = Heap::empty();
 static G_TIM: Mutex<RefCell<Option<CounterUs<TIM2>>>> = Mutex::new(RefCell::new(None));
 static G_OVF: Mutex<RefCell<Option<u16>>> = Mutex::new(RefCell::new(Some(0 as u16)));
 
-static mut RX: Option<Rx<USART1>> = None;
-static mut TX: Option<Tx<USART1>> = None;
+static mut RX: Option<Rx<USART1>> = None; 
+static mut TX: Option<Tx<USART1>> = None;// todo make thoses safe
 
+static COMMAND_PARSER: Mutex<RefCell<Option<CommandParser>>> = Mutex::new(RefCell::new(None));
 #[entry]
 fn main() -> ! {
     // Initialize the allocator BEFORE you use it
@@ -62,6 +68,14 @@ fn main() -> ! {
         static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
         unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
     }
+
+    // Initialize the commands for the command parser
+    let mut commands = HashMap::new();
+    commands.insert("help", Command::new("help", help));
+      
+    let command_parser = CommandParser::new(commands);
+    cortex_m::interrupt::free(|cs| *COMMAND_PARSER.borrow(cs).borrow_mut() = Some(command_parser));
+
 
     // Get access to the core peripherals from the cortex-m crate
     let _cp = cortex_m::Peripherals::take().unwrap();
@@ -113,7 +127,7 @@ fn main() -> ! {
 
     // Set up the usart device. Take ownership over the USART register and tx/rx pins. The rest of
     // the registers are used to enable and configure the device.
-    let serial = Serial::new(
+    let mut serial = Serial::new(
         dp.USART1,
         (tx, rx),
         &mut afio.mapr,
@@ -125,12 +139,13 @@ fn main() -> ! {
         &clocks,
     );
 
+    serial.listen(hal::serial::Event::Rxne);
+
     // Split the serial struct into a receiving and a transmitting part
     let (mut tx, mut rx) = serial.split();
 
-    tx.listen();
+    // tx.listen();
     rx.listen();
-    // rx.listen_idle();
 
     cortex_m::interrupt::free(|_| unsafe {
         TX.replace(tx);
@@ -222,21 +237,38 @@ unsafe fn USART1() {
         if let Some(rx) = RX.as_mut() {
             if rx.is_rx_not_empty() {
                 if let Ok(w) = nb::block!(rx.read()) {
-                    // BUFFER[WIDX] = w;
-                    // WIDX += 1;
-                    // if WIDX >= BUFFER_LEN - 1 {
-                    //     write(&BUFFER[..]);
-                    //     WIDX = 0;
-                    // }
-                    write(&[w]);
+                    BUFFER[WIDX] = w;
+                    WIDX += 1;
                 }
-                rx.listen_idle();
-            } else if rx.is_idle() {
-                rx.unlisten_idle();
-                let a = &BUFFER[0..WIDX];
-                write(&BUFFER[0..WIDX]);
+            }
+            if BUFFER[WIDX-1] == b'\n' {
+                // treat command
+
+                // parse command using the command parser
+                cortex_m::interrupt::free(|cs| {
+                    // if let Some(command_parser) = COMMAND_PARSER.borrow(cs).borrow_mut() { 
+                        // command_parser.parse(string);
+                        // }
+                        
+                    let command_u8 = &BUFFER[..WIDX];
+                    let string = core::str::from_utf8_unchecked(command_u8);
+
+                    // let command_parser = COMMAND_PARSER.borrow(cs).borrow().borrow().as_ref().unwrap();
+                    COMMAND_PARSER.borrow(cs).borrow().borrow().as_ref().unwrap().parse(string);
+                    // command_parser.parse(string);
+                });
+
+
                 WIDX = 0;
             }
         }
     })
+}
+
+// functions for commands
+fn help(_: &[&str]) -> &'static str {
+    unsafe {
+        write(b"help command");
+    }
+    ""
 }
