@@ -18,6 +18,10 @@ panic-semihosting = "0.6.0"
 libm = "0.2.6"
 
 fugit = "0.3.6"
+
+hashbrown = "0.13.1"
+unwrap-infallible = "0.1.5"
+
 [dependencies.stm32f1xx-hal]
 version = "0.10.0"
 features = ["rt", "stm32f103", "medium"]
